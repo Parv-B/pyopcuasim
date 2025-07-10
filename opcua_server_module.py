@@ -1,4 +1,4 @@
-# opcua_server_module.py (Modified)
+# opcua_server_module.py (Corrected for Network Discovery)
 """
 OPC UA Server Implementation for the Simulator
 
@@ -19,16 +19,16 @@ class OPCUAServer:
     """
     Manages a single OPC UA Server instance, running in its own thread.
     """
-    # --- CHANGE: Added `host_ip` to the constructor ---
     def __init__(self, port: int = 4840, name: str = "OPC UA Device", host_ip: str = "127.0.0.1"):
         self.port = port
         self.name = name
+        # --- CHANGE 1: Store the host_ip as a class attribute ---
+        self.host_ip = host_ip
         
-        # --- CHANGE: Differentiate between bind URL and advertised endpoint URL ---
         # The URL the server listens on (all interfaces)
         self.bind_url = f"opc.tcp://0.0.0.0:{port}/"
         # The URL a client should use to connect (specific IP)
-        self.endpoint_url = f"opc.tcp://{host_ip}:{port}/"
+        self.endpoint_url = f"opc.tcp://{self.host_ip}:{port}/"
         
         self.is_running = False
         self._server_thread: Optional[threading.Thread] = None
@@ -51,8 +51,12 @@ class OPCUAServer:
     async def _setup_server(self):
         """Coroutine to initialize the OPC UA server and its nodes."""
         self._server_obj = Server()
+        
+        # --- CHANGE 2 (CRITICAL): Set the hostname for the server to advertise ---
+        # This must be done *before* server.init()
+        self._server_obj.hostname = self.host_ip
+        
         await self._server_obj.init()
-        # --- CHANGE: Use the bind_url for setting the endpoint ---
         self._server_obj.set_endpoint(self.bind_url)
         
         self.namespace_idx = await self._server_obj.register_namespace(self.namespace_uri)
@@ -71,7 +75,7 @@ class OPCUAServer:
         
         log.info(f"OPC UA Server '{self.name}' setup complete.")
 
-    # --- Other methods remain the same ---
+    # --- Other methods remain unchanged ---
     
     async def _create_ua_variable(self, parent_folder, var_type, name, value):
         if self.namespace_idx is None: return
@@ -131,7 +135,7 @@ class OPCUAServer:
     def get_status(self) -> Dict[str, Any]:
         return {
             'name': self.name,
-            'endpoint_url': self.endpoint_url, # This now returns the connectable URL
+            'endpoint_url': self.endpoint_url,
             'port': self.port,
             'is_running': self.is_running,
             'namespace_uri': self.namespace_uri,
