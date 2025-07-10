@@ -1,0 +1,202 @@
+<!-- templates/opcua_index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python OPC UA Server Simulator</title>
+    <style>
+        :root { --bg-color: #f0f2f5; --card-bg: #ffffff; --text-color: #1c1e21; --border-color: #d4d6d9; --header-bg: #2c5282; --header-text: #ffffff; --button-primary: #2c5282; --button-secondary: #6c757d; --button-danger: #c82333; --status-running: #28a745; --status-stopped: #dc3545; --table-header-bg: #e9ecef; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        header { background-color: var(--header-bg); color: var(--header-text); padding: 15px 25px; border-radius: 8px; margin-bottom: 25px; text-align: center; }
+        h1, h2, h3 { margin-top: 0; }
+        .card { background-color: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: end; }
+        input[type="text"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; box-sizing: border-box; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; color: white; cursor: pointer; font-weight: bold; }
+        .btn-primary { background-color: var(--button-primary); }
+        .btn-secondary { background-color: var(--button-secondary); }
+        .btn-danger { background-color: var(--button-danger); }
+        .server-list { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .server-card { display: flex; flex-direction: column; gap: 15px; }
+        .server-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .server-info { display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        .status-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .status-running { background-color: var(--status-running); }
+        .status-stopped { background-color: var(--status-stopped); }
+        .data-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border-color); word-break: break-all; }
+        thead th { background-color: var(--table-header-bg); }
+        .update-form { display: flex; gap: 5px; }
+        .update-form input[type="text"] { flex-grow: 1; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Python OPC UA Server Simulator</h1>
+            <p>Create and manage multiple OPC UA servers from your browser.</p>
+        </header>
+
+        <div class="card">
+            <h2>Create New Server</h2>
+            <form id="create-server-form" class="form-grid">
+                <div>
+                    <label for="name">Server Name</label>
+                    <input type="text" id="name" name="name" value="Production Line" required>
+                </div>
+                <div>
+                    <label for="port">TCP Port</label>
+                    <input type="number" id="port" name="port" value="4840" min="1024" max="65535" required>
+                </div>
+                <button type="submit" class="btn-primary">Create and Start</button>
+            </form>
+        </div>
+
+        <div class="server-list" id="servers-container">
+            <!-- Server cards will be injected here by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const serversContainer = document.getElementById('servers-container');
+        const createForm = document.getElementById('create-server-form');
+
+        async function loadServers() {
+            try {
+                const response = await fetch(`${API_BASE}/servers`);
+                if (!response.ok) throw new Error('Failed to fetch servers');
+                const servers = await response.json();
+                serversContainer.innerHTML = '';
+                servers.forEach(renderServer);
+            } catch (error) {
+                console.error('Error loading servers:', error);
+                serversContainer.innerHTML = `<p style="color:red;">Error: ${error.message}</p>`;
+            }
+        }
+
+        function renderServer(server) {
+            const card = document.createElement('div');
+            card.className = 'card server-card';
+            const statusClass = server.is_running ? 'status-running' : 'status-stopped';
+            const statusText = server.is_running ? 'Running' : 'Stopped';
+
+            card.innerHTML = `
+                <div class="server-header">
+                    <h3>${server.name} (ID: ${server.id})</h3>
+                    <div class="server-info">
+                        <span><span class="status-dot ${statusClass}"></span> ${statusText}</span>
+                        <span><strong>Endpoint:</strong> ${server.endpoint_url}</span>
+                        <button class="btn-secondary btn-refresh" data-id="${server.id}">Refresh Data</button>
+                        <button class="btn-danger btn-delete" data-id="${server.id}">Delete</button>
+                    </div>
+                </div>
+                <div class="data-container" id="data-container-${server.id}">
+                    <p>Click "Refresh Data" to see variables.</p>
+                </div>
+            `;
+            serversContainer.appendChild(card);
+        }
+        
+        async function loadServerData(serverId) {
+            const response = await fetch(`${API_BASE}/servers/${serverId}/data`);
+            if (!response.ok) throw new Error('Failed to load data');
+            const data = await response.json();
+            renderDataTables(serverId, data);
+        }
+
+        function renderDataTables(serverId, data) {
+            const container = document.getElementById(`data-container-${serverId}`);
+            if (!container) return;
+            
+            const generateTable = (title, type, points) => {
+                const isBool = type === 'boolean';
+                const isNum = type === 'integer' || type === 'float';
+                const valueInputType = isBool ? 'checkbox' : (isNum ? 'number' : 'text');
+                const step = (type === 'float') ? 'step="any"' : '';
+                
+                const rows = Object.entries(points).map(([name, val]) => `
+                    <tr><td>${name}</td><td>${isBool ? (val ? 'TRUE' : 'FALSE') : val}</td></tr>`).join('');
+
+                return `<div><h4>${title}</h4>
+                    <form class="update-form" data-server-id="${serverId}" data-type="${type}">
+                        <input type="text" placeholder="Variable Name" required>
+                        <input type="${valueInputType}" placeholder="Value" ${step} ${isBool ? '' : 'required'}>
+                        <button type="submit" class="btn-primary" style="padding: 5px 8px;">Set</button>
+                    </form>
+                    <table><thead><tr><th>Name</th><th>Value</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+            };
+            container.innerHTML = `<div class="data-tables">
+                ${generateTable('Boolean Variables', 'boolean', data.boolean)}
+                ${generateTable('Integer Variables', 'integer', data.integer)}
+                ${generateTable('Float Variables', 'float', data.float)}
+                ${generateTable('String Variables', 'string', data.string)}</div>`;
+        }
+
+        createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                name: createForm.name.value,
+                port: parseInt(createForm.port.value)
+            };
+            const response = await fetch(`${API_BASE}/servers`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                alert(`Error: ${err.error}`);
+            } else {
+                createForm.port.value = payload.port + 1;
+                loadServers();
+            }
+        });
+
+        serversContainer.addEventListener('click', async (e) => {
+            const button = e.target;
+            const serverId = button.dataset.id;
+            if (button.classList.contains('btn-delete')) {
+                if (confirm(`Delete server ${serverId}?`)) {
+                    await fetch(`${API_BASE}/servers/${serverId}`, { method: 'DELETE' });
+                    loadServers();
+                }
+            } else if (button.classList.contains('btn-refresh')) {
+                button.textContent = 'Refreshing...';
+                button.disabled = true;
+                try {
+                    await loadServerData(serverId);
+                } catch {
+                    alert('Failed to refresh data.');
+                } finally {
+                    button.textContent = 'Refresh Data';
+                    button.disabled = false;
+                }
+            }
+        });
+        
+        serversContainer.addEventListener('submit', async (e) => {
+            if (e.target.classList.contains('update-form')) {
+                e.preventDefault();
+                const form = e.target;
+                const { serverId, type } = form.dataset;
+                const name = form.querySelector('input[type="text"]').value;
+                const valueInput = form.querySelector('input:not([type="text"])');
+                const value = (valueInput.type === 'checkbox') ? valueInput.checked : valueInput.value;
+                const payload = { type, name, value };
+
+                await fetch(`${API_BASE}/servers/${serverId}/data`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+                });
+                form.reset();
+                loadServerData(serverId);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', loadServers);
+    </script>
+</body>
+</html>
