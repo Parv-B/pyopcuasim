@@ -1,4 +1,4 @@
-# opcua_app.py
+# opcua_app.py (Updated for Custom Endpoints)
 
 import threading
 import logging
@@ -11,20 +11,15 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# --- Global State: Dictionary of servers, keyed by port number ---
 OPCUA_SERVERS: dict[int, OpcUaServer] = {}
 STATE_LOCK = threading.Lock()
 
-# --- API Routes ---
-
 @app.route('/')
 def index():
-    """Serves the main HTML page."""
     return render_template('opcua_index.html')
 
 @app.route('/api/servers', methods=['GET'])
 def get_servers():
-    """Returns a list of all running OPC UA servers."""
     all_servers = []
     with STATE_LOCK:
         for port, server in OPCUA_SERVERS.items():
@@ -36,6 +31,7 @@ def get_servers():
             })
     return jsonify(all_servers)
 
+# MODIFICATION: Updated create_server function
 @app.route('/api/servers', methods=['POST'])
 def create_server():
     """Creates and starts a new OPC UA server instance."""
@@ -43,15 +39,22 @@ def create_server():
     try:
         port = int(data['port'])
         name = str(data.get('name') or f"OPC UA Server on Port {port}")
+        # Get the endpoint path, with a default if it's missing
+        endpoint_path = str(data.get('endpoint_path', '/simulator/server'))
+
+        # Basic validation for the path
+        if not endpoint_path.startswith('/'):
+            return jsonify({'error': 'Endpoint Path must start with a /'}), 400
+
     except (ValueError, TypeError, KeyError):
-        return jsonify({'error': 'Port must be provided as an integer'}), 400
+        return jsonify({'error': 'Port, Name, and Endpoint Path must be provided'}), 400
 
     with STATE_LOCK:
         if port in OPCUA_SERVERS:
             return jsonify({'error': f'A server is already configured on port {port}'}), 409
         
-        # Create and start the new server
-        server = OpcUaServer(port=port, name=name)
+        # Pass all parameters to the constructor
+        server = OpcUaServer(port=port, name=name, endpoint_path=endpoint_path)
         if not server.start_threaded():
             return jsonify({'error': f'Failed to start server on port {port}. It may be in use.'}), 500
             
@@ -60,12 +63,13 @@ def create_server():
     return jsonify({
         'message': f'OPC UA Server "{name}" on port {port} created successfully',
         'port': port,
-        'name': name
+        'name': name,
+        'endpoint_url': server.endpoint_url,
     }), 201
+
 
 @app.route('/api/servers/<int:port>', methods=['DELETE'])
 def delete_server(port):
-    """Stops and deletes an OPC UA server instance."""
     with STATE_LOCK:
         server = OPCUA_SERVERS.get(port)
         if not server:
@@ -79,14 +83,12 @@ def delete_server(port):
 
 @app.route('/api/servers/<int:port>/data', methods=['GET'])
 def get_server_data(port):
-    """Gets all data points for a specific OPC UA server."""
     with STATE_LOCK:
         server = OPCUA_SERVERS.get(port)
         if not server:
             return jsonify({'error': 'Server not found'}), 404
         data = server.get_all_data()
 
-    # Sort data for a consistent UI
     for key in data:
         data[key] = dict(sorted(data[key].items()))
         
@@ -94,7 +96,6 @@ def get_server_data(port):
 
 @app.route('/api/servers/<int:port>/data', methods=['POST'])
 def update_server_data(port):
-    """Updates a data point for a specific OPC UA server."""
     req_data = request.json
     try:
         data_type = req_data['type']
@@ -108,7 +109,6 @@ def update_server_data(port):
         if not server:
             return jsonify({'error': 'Server not found'}), 404
         
-        # The OpcUaServer class will handle the update
         success = server.set_data_point(data_type, var_name, value)
         if not success:
             return jsonify({'error': 'Failed to update data point.'}), 500
@@ -116,4 +116,4 @@ def update_server_data(port):
     return jsonify({'message': 'Data updated successfully'})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001, threaded=True, debug=True)
+    app.run(host='0.0.0.0', port=5001, threaded=True, debug=False)
