@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['opcua_app.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[('templates', 'templates')],

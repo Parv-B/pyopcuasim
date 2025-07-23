@@ -1,5 +1,3 @@
-# opcua_server_simplified.py (Corrected for AttributeError)
-
 import asyncio
 import logging
 import threading
@@ -8,7 +6,6 @@ from typing import Dict, Any, Optional
 try:
     from asyncua import Server, ua
     from asyncua.server.users import UserRole
-    # --- FIX: Import the Node class from its correct location ---
     from asyncua.common.node import Node
 except ImportError:
     print("FATAL: asyncua is not installed. Please run 'pip install asyncua'")
@@ -20,7 +17,6 @@ class SubHandler:
     def __init__(self, server_instance):
         self.server = server_instance
 
-    # --- FIX: Use the correctly imported Node type ---
     def datachange_notification(self, node: Node, val: Any, data):
         """
         This is the callback method that asyncua calls on a data change.
@@ -57,7 +53,6 @@ class OpcUaServer:
         self.float_vars: Dict[str, float] = {}
         self.string_vars: Dict[str, str] = {}
         
-        # --- FIX: Use the correctly imported Node type ---
         self.node_to_internal_map: Dict[Node, tuple[dict, str]] = {}
         
         self.ua_nodes: Dict[str, Node] = {}
@@ -99,7 +94,6 @@ class OpcUaServer:
         await subscription.subscribe_data_change(list(self.node_to_internal_map.keys()))
         log.info(f"Subscription created for {len(self.node_to_internal_map)} variables.")
 
-    # --- FIX: Use the correctly imported Node type ---
     def sync_change_from_opcua(self, node: Node, val: Any):
         """
         Updates the internal Python dictionary when a change from an OPC UA client is detected.

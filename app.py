@@ -4,7 +4,7 @@ import threading
 import logging
 from flask import Flask, render_template, request, jsonify
 
-from opcua_server_simplified import OpcUaServer
+from opcua_server import OpcUaServer
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ STATE_LOCK = threading.Lock()
 
 @app.route('/')
 def index():
-    return render_template('opcua_index.html')
+    return render_template('index.html')
 
 @app.route('/api/servers', methods=['GET'])
 def get_servers():
