@@ -61,10 +61,10 @@ class OpcUaServer:
         log.info(f"OpcUaServer '{self.name}' initialized for endpoint: {self.endpoint_url}")
 
     def _initialize_default_data(self):
-        self.boolean_vars = {"HeaterOn": True, "PumpActive": False, "SystemReady": True}
-        self.integer_vars = {"ProductionCount": 150, "ErrorCode": 0, "BatchID": 2024}
-        self.float_vars = {"Temperature": 25.5, "Pressure": 101.3, "FlowRate": 12.8}
-        self.string_vars = {"StatusMessage": "Running Normally", "LastOperator": "Admin"}
+        self.boolean_vars = {f"Bool{i:02d}": bool(i%2) for i in range(1, 11)}
+        self.integer_vars = {f"Int{i}": i for i in range(1, 11)}
+        self.float_vars = {f"Float{i}": i*1.1 for i in range(1, 11)}
+        self.string_vars = {f"Str{i}": f"String {i}" for i in range(1, 11)}
 
     async def _setup_server_nodes(self):
         self.server = Server()
@@ -79,7 +79,10 @@ class OpcUaServer:
         async def add_var(folder_name, var_dict, ua_type, prefix):
             folder = await device.add_folder(self.namespace_idx, folder_name)
             for name, value in var_dict.items():
-                var_node = await folder.add_variable(self.namespace_idx, name, value, ua_type)
+                numeric_part = ''.join(filter(str.isdigit, name))
+                node_id_str = name[0] + numeric_part
+                node_id = ua.NodeId(node_id_str, self.namespace_idx, ua.NodeIdType.String) 
+                var_node = await folder.add_variable(node_id, name, value, ua_type)
                 await var_node.set_writable()
                 self.ua_nodes[f"{prefix}_{name}"] = var_node
                 self.node_to_internal_map[var_node] = (var_dict, name)
