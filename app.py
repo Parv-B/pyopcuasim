@@ -3,6 +3,8 @@
 import threading
 import logging
 from flask import Flask, render_template, request, jsonify
+from threading import Timer
+import webbrowser
 
 from opcua_server import OpcUaServer
 
@@ -116,4 +118,5 @@ def update_server_data(port):
     return jsonify({'message': 'Data updated successfully'})
 
 if __name__ == '__main__':
+    Timer(1.0, lambda: webbrowser.open_new("http://localhost:5001")).start()
     app.run(host='0.0.0.0', port=5001, threaded=True, debug=False)
