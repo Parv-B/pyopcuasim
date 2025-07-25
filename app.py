@@ -21,9 +21,12 @@ STATE_LOCK = threading.Lock()
 def get_base_dir():
     # If running in a PyInstaller bundle
     if getattr(sys, 'frozen', False):
-        return sys._MEIPASS
+        path = sys._MEIPASS
     # If running as a script
-    return os.path.dirname(os.path.abspath(__file__))
+    else:
+        path = os.path.dirname(os.path.abspath(__file__))
+    print(path)
+    return path
 
 BASE_DIR = get_base_dir()
 
@@ -35,7 +38,7 @@ def index():
 def get_servers():
     all_servers = []
     with STATE_LOCK:
-        for port, server in OPCUA_SERUA_SERVERS.items():
+        for port, server in OPCUA_SERVERS.items():
             all_servers.append({
                 'port': port,
                 'name': server.name,
@@ -63,8 +66,9 @@ def create_server():
         return jsonify({'error': 'Port, Name, and Endpoint Path must be provided'}), 400
 
     csv_data_content = None
-    csv_filename = f"{port}.csv"
+    csv_filename = f"data\\{port}.csv"
     csv_file_path = os.path.join(BASE_DIR, csv_filename)
+    print(f"Looking for CSV file at: {csv_file_path}")
     
     if os.path.exists(csv_file_path):
         try:
