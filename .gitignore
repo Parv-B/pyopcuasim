@@ -2,3 +2,4 @@ build/
 dist/
 venc/
 __pycache__/
+OpcUASimulator.spec
