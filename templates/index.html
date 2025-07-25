@@ -32,8 +32,6 @@
         .update-form input[placeholder="Name"] { flex-grow: 1; }
         .update-form input[placeholder="Value"] { width: 100px; }
         .endpoint-url { font-family: 'Courier New', Courier, monospace; font-size: 0.9em; color: #555; background-color: #eee; padding: 2px 6px; border-radius: 4px; word-break: break-all;}
-        .csv-upload-section { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
-        .csv-info { font-size: 0.9em; color: #666; margin-top: 8px; }
         .editable-value { 
             cursor: pointer; 
             padding: 4px 8px; 
@@ -103,6 +101,8 @@
                 <button type="submit" class="btn-primary">Create Server</button>
             </form>
             
+            <!-- Removed CSV Upload Section -->
+            <!--
             <div class="csv-upload-section">
                 <h3>CSV Data Import (Optional)</h3>
                 <div>
@@ -115,6 +115,7 @@
                 </div>
                 <div id="csv-preview" class="csv-preview" style="display: none;"></div>
             </div>
+            -->
         </div>
         <div class="server-list" id="servers-container"></div>
     </div>
@@ -122,30 +123,6 @@
         const API_BASE = '/api';
         const serversContainer = document.getElementById('servers-container');
         const createForm = document.getElementById('create-server-form');
-        const csvFileInput = document.getElementById('csv-file');
-        const csvPreview = document.getElementById('csv-preview');
-        
-        let csvData = null;
-
-        // Handle CSV file upload
-        csvFileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type === 'text/csv') {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    csvData = e.target.result;
-                    // Show preview
-                    const lines = csvData.split('\n').slice(0, 6); // Show first 6 lines
-                    csvPreview.textContent = lines.join('\n') + (csvData.split('\n').length > 6 ? '\n...' : '');
-                    csvPreview.style.display = 'block';
-                };
-                reader.readAsText(file);
-            } else {
-                csvData = null;
-                csvPreview.style.display = 'none';
-                if (file) alert('Please select a valid CSV file.');
-            }
-        });
 
         async function loadServers() {
             const response = await fetch(`${API_BASE}/servers`);
@@ -250,8 +227,8 @@
             const payload = { 
                 port: parseInt(createForm.port.value), 
                 name: createForm.name.value,
-                endpoint_path: endpointPath,
-                csv_data: csvData // Include CSV data if available
+                endpoint_path: endpointPath
+                // csv_data: csvData // Removed: No longer passed from frontend
             };
             
             const response = await fetch(`${API_BASE}/servers`, {
@@ -262,10 +239,7 @@
                 const err = await response.json();
                 alert(`Error: ${err.error}`);
             } else {
-                createForm.port.value = payload.port + 1; // Suggest next port
-                csvFileInput.value = ''; // Clear file input
-                csvData = null; // Clear CSV data
-                csvPreview.style.display = 'none'; // Hide preview
+                createForm.port.value = payload.port + 1;
                 loadServers();
             }
         });

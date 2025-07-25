@@ -2,6 +2,8 @@ import threading
 import logging
 import csv
 import io
+import os # Import os module
+import sys # Import sys module for PyInstaller path
 from flask import Flask, render_template, request, jsonify
 from threading import Timer
 import webbrowser
@@ -16,6 +18,15 @@ app = Flask(__name__)
 OPCUA_SERVERS: dict[int, OpcUaServer] = {}
 STATE_LOCK = threading.Lock()
 
+def get_base_dir():
+    # If running in a PyInstaller bundle
+    if getattr(sys, 'frozen', False):
+        return sys._MEIPASS
+    # If running as a script
+    return os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = get_base_dir()
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -24,7 +35,7 @@ def index():
 def get_servers():
     all_servers = []
     with STATE_LOCK:
-        for port, server in OPCUA_SERVERS.items():
+        for port, server in OPCUA_SERUA_SERVERS.items():
             all_servers.append({
                 'port': port,
                 'name': server.name,
@@ -43,7 +54,7 @@ def create_server():
         name = str(data.get('name') or f"OPC UA Server on Port {port}")
         # Get the endpoint path, with a default if it's missing
         endpoint_path = str(data.get('endpoint_path', '/simulator/server'))
-        csv_data = data.get('csv_data')  # Optional CSV data
+        # csv_data = data.get('csv_data')  # Removed: Optional CSV data no longer passed from frontend
 
         if not endpoint_path.startswith('/'):
             return jsonify({'error': 'Endpoint Path must start with a /'}), 400
@@ -51,12 +62,26 @@ def create_server():
     except (ValueError, TypeError, KeyError):
         return jsonify({'error': 'Port, Name, and Endpoint Path must be provided'}), 400
 
+    csv_data_content = None
+    csv_filename = f"{port}.csv"
+    csv_file_path = os.path.join(BASE_DIR, csv_filename)
+    
+    if os.path.exists(csv_file_path):
+        try:
+            with open(csv_file_path, 'r', encoding='utf-8') as f:
+                csv_data_content = f.read()
+            log.info(f"Loaded CSV data from {csv_file_path} for server on port {port}.")
+        except IOError as e:
+            log.warning(f"Could not read CSV file {csv_file_path}: {e}. Server will start with default data.")
+    else:
+        log.info(f"No CSV file found at {csv_file_path}. Server will start with default data.")
+
     with STATE_LOCK:
         if port in OPCUA_SERVERS:
             return jsonify({'error': f'A server is already configured on port {port}'}), 409
         
-        # Pass all parameters to the constructor, including CSV data
-        server = OpcUaServer(port=port, name=name, endpoint_path=endpoint_path, csv_data=csv_data)
+        # Pass all parameters to the constructor, including CSV data content
+        server = OpcUaServer(port=port, name=name, endpoint_path=endpoint_path, csv_data=csv_data_content) # Pass loaded content
         if not server.start_threaded():
             return jsonify({'error': f'Failed to start server on port {port}. It may be in use.'}), 500
             
