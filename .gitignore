@@ -3,3 +3,4 @@ dist/
 venc/
 __pycache__/
 *.spec
+build.bat
