@@ -1,5 +1,3 @@
-# opcua_app.py (Updated for Custom Endpoints)
-
 import threading
 import logging
 from flask import Flask, render_template, request, jsonify
@@ -44,7 +42,6 @@ def create_server():
         # Get the endpoint path, with a default if it's missing
         endpoint_path = str(data.get('endpoint_path', '/simulator/server'))
 
-        # Basic validation for the path
         if not endpoint_path.startswith('/'):
             return jsonify({'error': 'Endpoint Path must start with a /'}), 400
 

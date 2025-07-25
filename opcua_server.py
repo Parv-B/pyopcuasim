@@ -2,14 +2,9 @@ import asyncio
 import logging
 import threading
 from typing import Dict, Any, Optional
-
-try:
-    from asyncua import Server, ua
-    from asyncua.server.users import UserRole
-    from asyncua.common.node import Node
-except ImportError:
-    print("FATAL: asyncua is not installed. Please run 'pip install asyncua'")
-    exit()
+from asyncua import Server, ua
+from asyncua.server.users import UserRole
+from asyncua.common.node import Node
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +13,6 @@ class SubHandler:
         self.server = server_instance
 
     def datachange_notification(self, node: Node, val: Any, data):
-        """
-        This is the callback method that asyncua calls on a data change.
-        """
         self.server.sync_change_from_opcua(node, val)
 
     def event_notification(self, event):
@@ -30,7 +22,6 @@ class SubHandler:
 class OpcUaServer:
     """
     Manages a single, self-contained OPC UA server instance.
-    Now with two-way data synchronization.
     """
     def __init__(self, port: int = 4840, name: str = "OPC UA Server", endpoint_path: str = "/simulator/server"):
         self.port = port
