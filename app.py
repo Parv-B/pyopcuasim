@@ -1,5 +1,7 @@
 import threading
 import logging
+import csv
+import io
 from flask import Flask, render_template, request, jsonify
 from threading import Timer
 import webbrowser
@@ -41,6 +43,7 @@ def create_server():
         name = str(data.get('name') or f"OPC UA Server on Port {port}")
         # Get the endpoint path, with a default if it's missing
         endpoint_path = str(data.get('endpoint_path', '/simulator/server'))
+        csv_data = data.get('csv_data')  # Optional CSV data
 
         if not endpoint_path.startswith('/'):
             return jsonify({'error': 'Endpoint Path must start with a /'}), 400
@@ -52,8 +55,8 @@ def create_server():
         if port in OPCUA_SERVERS:
             return jsonify({'error': f'A server is already configured on port {port}'}), 409
         
-        # Pass all parameters to the constructor
-        server = OpcUaServer(port=port, name=name, endpoint_path=endpoint_path)
+        # Pass all parameters to the constructor, including CSV data
+        server = OpcUaServer(port=port, name=name, endpoint_path=endpoint_path, csv_data=csv_data)
         if not server.start_threaded():
             return jsonify({'error': f'Failed to start server on port {port}. It may be in use.'}), 500
             

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import threading
+import csv
+import io
 from typing import Dict, Any, Optional
 from asyncua import Server, ua
 from asyncua.server.users import UserRole
@@ -23,7 +25,7 @@ class OpcUaServer:
     """
     Manages a single, self-contained OPC UA server instance.
     """
-    def __init__(self, port: int = 4840, name: str = "OPC UA Server", endpoint_path: str = "/simulator/server"):
+    def __init__(self, port: int = 4840, name: str = "OPC UA Server", endpoint_path: str = "/simulator/server", csv_data: str = None):
         self.port = port
         self.name = name
         self.endpoint_path = endpoint_path
@@ -39,23 +41,74 @@ class OpcUaServer:
         
         self._startup_event = threading.Event()
         
-        self.boolean_vars: Dict[str, bool] = {}
-        self.integer_vars: Dict[str, int] = {}
-        self.float_vars: Dict[str, float] = {}
-        self.string_vars: Dict[str, str] = {}
+        # Updated data structure for the four categories
+        self.analog_input_vars: Dict[str, float] = {}
+        self.analog_output_vars: Dict[str, float] = {}
+        self.digital_input_vars: Dict[str, bool] = {}
+        self.digital_output_vars: Dict[str, bool] = {}
         
         self.node_to_internal_map: Dict[Node, tuple[dict, str]] = {}
         
         self.ua_nodes: Dict[str, Node] = {}
         
-        self._initialize_default_data()
+        if csv_data:
+            self._parse_csv_data(csv_data)
+        else:
+            self._initialize_default_data()
+            
         log.info(f"OpcUaServer '{self.name}' initialized for endpoint: {self.endpoint_url}")
 
+    def _parse_csv_data(self, csv_data: str):
+        """Parse CSV data using fixed column positions."""
+        try:
+            lines = csv_data.strip().split('\n')
+            # Skip header row
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
+                    
+                cols = [col.strip() for col in line.split(',')]
+                
+                # Analog Input: columns 0 (name), 1 (desc), 2 (value)
+                if len(cols) > 0 and cols[0]:
+                    ai_name = cols[0]
+                    ai_desc = cols[1] if len(cols) > 1 else ""
+                    ai_value = float(cols[2]) if len(cols) > 2 and cols[2] else 0.0
+                    self.analog_input_vars[ai_name] = {'value': ai_value, 'desc': ai_desc}
+                
+                # Analog Output: columns 4 (name), 5 (value), 6 (desc)
+                if len(cols) > 4 and cols[4]:
+                    ao_name = cols[4]
+                    ao_value = float(cols[5]) if len(cols) > 5 and cols[5] else 0.0
+                    ao_desc = cols[6] if len(cols) > 6 else ""
+                    self.analog_output_vars[ao_name] = {'value': ao_value, 'desc': ao_desc}
+                
+                # Digital Input: columns 8 (name), 9 (value), 10 (desc)
+                if len(cols) > 8 and cols[8]:
+                    di_name = cols[8]
+                    di_value = bool(int(cols[9])) if len(cols) > 9 and cols[9] else False
+                    di_desc = cols[10] if len(cols) > 10 else ""
+                    self.digital_input_vars[di_name] = {'value': di_value, 'desc': di_desc}
+                
+                # Digital Output: columns 12 (name), 13 (value), 14 (desc)
+                if len(cols) > 12 and cols[12]:
+                    do_name = cols[12]
+                    do_value = bool(int(cols[13])) if len(cols) > 13 and cols[13] else False
+                    do_desc = cols[14] if len(cols) > 14 else ""
+                    self.digital_output_vars[do_name] = {'value': do_value, 'desc': do_desc}
+            
+            log.info(f"Parsed CSV data: AI={len(self.analog_input_vars)}, AO={len(self.analog_output_vars)}, DI={len(self.digital_input_vars)}, DO={len(self.digital_output_vars)}")
+            
+        except Exception as e:
+            log.error(f"Error parsing CSV data: {e}")
+            self._initialize_default_data()
+
     def _initialize_default_data(self):
-        self.boolean_vars = {f"Bool{i:02d}": bool(i%2) for i in range(1, 11)}
-        self.integer_vars = {f"Int{i}": i for i in range(1, 11)}
-        self.float_vars = {f"Float{i}": i*1.1 for i in range(1, 11)}
-        self.string_vars = {f"Str{i}": f"String {i}" for i in range(1, 11)}
+        """Initialize with default data if no CSV is provided."""
+        self.analog_input_vars = {f"AI{i:02d}": {'value': i*1.1, 'desc': f"Analog Input {i}"} for i in range(1, 11)}
+        self.analog_output_vars = {f"AO{i:02d}": {'value': i*0.5, 'desc': f"Analog Output {i}"} for i in range(1, 6)}
+        self.digital_input_vars = {f"DI{i:02d}": {'value': bool(i%2), 'desc': f"Digital Input {i}"} for i in range(1, 11)}
+        self.digital_output_vars = {f"DO{i:02d}": {'value': bool(i%3), 'desc': f"Digital Output {i}"} for i in range(1, 6)}
 
     async def _setup_server_nodes(self):
         self.server = Server()
@@ -69,19 +122,25 @@ class OpcUaServer:
         
         async def add_var(folder_name, var_dict, ua_type, prefix):
             folder = await device.add_folder(self.namespace_idx, folder_name)
-            for name, value in var_dict.items():
-                numeric_part = ''.join(filter(str.isdigit, name))
-                node_id_str = name[0] + numeric_part
-                node_id = ua.NodeId(node_id_str, self.namespace_idx, ua.NodeIdType.String) 
+            for name, data in var_dict.items():
+                value = data['value']
+                desc = data['desc']
+                
+                node_id = ua.NodeId(name, self.namespace_idx, ua.NodeIdType.String) 
                 var_node = await folder.add_variable(node_id, name, value, ua_type)
                 await var_node.set_writable()
+                
+                if desc:
+                    datavalue = ua.DataValue(ua.LocalizedText(desc))
+                    await var_node.write_attribute(ua.AttributeIds.Description, datavalue)
+                
                 self.ua_nodes[f"{prefix}_{name}"] = var_node
                 self.node_to_internal_map[var_node] = (var_dict, name)
 
-        await add_var("Booleans", self.boolean_vars, ua.VariantType.Boolean, "bool")
-        await add_var("Integers", self.integer_vars, ua.VariantType.Int64, "int")
-        await add_var("Floats", self.float_vars, ua.VariantType.Double, "float")
-        await add_var("Strings", self.string_vars, ua.VariantType.String, "str")
+        await add_var("AnalogInput", self.analog_input_vars, ua.VariantType.Double, "ai")
+        await add_var("AnalogOutput", self.analog_output_vars, ua.VariantType.Double, "ao")
+        await add_var("DigitalInput", self.digital_input_vars, ua.VariantType.Boolean, "di")
+        await add_var("DigitalOutput", self.digital_output_vars, ua.VariantType.Boolean, "do")
 
         handler = SubHandler(self)
         subscription = await self.server.create_subscription(500, handler)
@@ -94,12 +153,11 @@ class OpcUaServer:
         """
         if node in self.node_to_internal_map:
             target_dict, var_name = self.node_to_internal_map[node]
-            if var_name in target_dict and target_dict[var_name] != val:
-                log.info(f"SYNC: External change detected on '{var_name}'. Old: {target_dict[var_name]}, New: {val}")
-                target_dict[var_name] = val
+            if var_name in target_dict and target_dict[var_name]['value'] != val:
+                log.info(f"SYNC: External change detected on '{var_name}'. Old: {target_dict[var_name]['value']}, New: {val}")
+                target_dict[var_name]['value'] = val
         else:
             log.warning(f"SYNC: Received change for an untracked node: {node}")
-
 
     def _run_server(self):
         self._loop = asyncio.new_event_loop()
@@ -156,19 +214,19 @@ class OpcUaServer:
 
     def get_all_data(self) -> Dict[str, Dict[str, Any]]:
         return {
-            'boolean_vars': self.boolean_vars.copy(),
-            'integer_vars': self.integer_vars.copy(),
-            'float_vars': self.float_vars.copy(),
-            'string_vars': self.string_vars.copy()
+            'analog_input_vars': self.analog_input_vars.copy(),
+            'analog_output_vars': self.analog_output_vars.copy(),
+            'digital_input_vars': self.digital_input_vars.copy(),
+            'digital_output_vars': self.digital_output_vars.copy()
         }
 
     def set_data_point(self, data_type: str, var_name: str, value: Any) -> bool:
         log.info(f"Attempting to set {data_type} '{var_name}' to {value}")
         data_map = {
-            'boolean_vars': (self.boolean_vars, bool, 'bool'),
-            'integer_vars': (self.integer_vars, int, 'int'),
-            'float_vars': (self.float_vars, float, 'float'),
-            'string_vars': (self.string_vars, str, 'str'),
+            'analog_input_vars': (self.analog_input_vars, float, 'ai'),
+            'analog_output_vars': (self.analog_output_vars, float, 'ao'),
+            'digital_input_vars': (self.digital_input_vars, bool, 'di'),
+            'digital_output_vars': (self.digital_output_vars, bool, 'do'),
         }
 
         if data_type not in data_map:
@@ -183,7 +241,10 @@ class OpcUaServer:
              log.error(f"Could not cast value '{value}' to type for {data_type}")
              return False
 
-        target_dict[var_name] = sanitized_value
+        if var_name not in target_dict:
+            target_dict[var_name] = {'value': sanitized_value, 'desc': ''}
+        else:
+            target_dict[var_name]['value'] = sanitized_value
 
         if self.is_running and self._loop:
             node_key = f"{prefix}_{var_name}"
