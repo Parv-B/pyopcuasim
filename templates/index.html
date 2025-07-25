@@ -34,7 +34,58 @@
         .endpoint-url { font-family: 'Courier New', Courier, monospace; font-size: 0.9em; color: #555; background-color: #eee; padding: 2px 6px; border-radius: 4px; word-break: break-all;}
         .csv-upload-section { background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 15px; }
         .csv-info { font-size: 0.9em; color: #666; margin-top: 8px; }
-        .csv-preview { max-height: 200px; overflow-y: auto; background-color: #fff; border: 1px solid var(--border-color); padding: 10px; margin-top: 10px; font-family: monospace; font-size: 0.8em; }
+        .editable-value { 
+            cursor: pointer; 
+            padding: 4px 8px; 
+            border-radius: 3px; 
+            transition: background-color 0.2s;
+        }
+        .editable-value:hover { 
+            background-color: #f0f0f0; 
+        }
+        .editing-value {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+        }
+        .edit-input {
+            border: none;
+            background: transparent;
+            width: 100%;
+            padding: 2px 4px;
+            font-size: inherit;
+            font-family: inherit;
+        }
+        .edit-input:focus {
+            outline: 2px solid var(--button-primary);
+            outline-offset: 1px;
+        }
+        .digital-toggle {
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+            background-color: #ccc;
+            border-radius: 12px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .digital-toggle.on {
+            background-color: var(--status-running);
+        }
+        .digital-toggle::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background-color: white;
+            top: 3px;
+            left: 3px;
+            transition: transform 0.3s;
+        }
+        .digital-toggle.on::after {
+            transform: translateX(26px);
+        }
     </style>
 </head>
 <body>
@@ -149,17 +200,28 @@
                 const rows = Object.entries(points).map(([name, data]) => {
                     const value = data.value;
                     const desc = data.desc || '';
-                    const displayValue = isDigital ? (value ? 'ON' : 'OFF') : value;
-                    return `<tr><td>${name}</td><td>${desc}</td><td>${displayValue}</td></tr>`;
+                    
+                    let valueCell;
+                    if (isDigital) {
+                        valueCell = `<span class="digital-toggle ${value ? 'on' : ''}" 
+                                          data-port="${port}" 
+                                          data-type="${typeKey}" 
+                                          data-name="${name}" 
+                                          data-value="${value}">
+                                      </span>`;
+                    } else {
+                        valueCell = `<span class="editable-value" 
+                                          data-port="${port}" 
+                                          data-type="${typeKey}" 
+                                          data-name="${name}">${value}</span>`;
+                    }
+                    
+                    return `<tr><td>${name}</td><td>${desc}</td><td>${valueCell}</td></tr>`;
                 }).join('');
+                
                 return `
                     <div>
                         <h4>${title}</h4>
-                        <form class="update-form" data-port="${port}" data-type="${typeKey}">
-                            <input type="text" placeholder="Name" required>
-                            <input type="${isDigital ? 'checkbox' : 'text'}" placeholder="Value" ${isDigital ? '' : 'required'}>
-                            <button type="submit" style="padding:5px 8px;">Set</button>
-                        </form>
                         <table>
                             <thead><tr><th>Name</th><th>Description</th><th>Value</th></tr></thead>
                             <tbody>${rows}</tbody>
@@ -208,7 +270,80 @@
             }
         });
 
+        // Handle click-to-edit for analog values
         serversContainer.addEventListener('click', async (e) => {
+            // Handle digital toggle clicks
+            if (e.target.classList.contains('digital-toggle')) {
+                const toggle = e.target;
+                const port = toggle.dataset.port;
+                const type = toggle.dataset.type;
+                const name = toggle.dataset.name;
+                const currentValue = toggle.dataset.value === 'true';
+                const newValue = !currentValue;
+                
+                // Update the toggle visually
+                toggle.classList.toggle('on', newValue);
+                toggle.dataset.value = newValue;
+                
+                // Send update to server
+                await updateServerValue(port, type, name, newValue);
+                return;
+            }
+            
+            // Handle analog value editing
+            if (e.target.classList.contains('editable-value') && !e.target.querySelector('input')) {
+                const span = e.target;
+                const currentValue = span.textContent;
+                
+                // Create input field
+                const input = document.createElement('input');
+                input.className = 'edit-input';
+                input.type = 'number';
+                input.step = 'any';
+                input.value = currentValue;
+                
+                // Replace content with input
+                span.innerHTML = '';
+                span.appendChild(input);
+                span.classList.add('editing-value');
+                
+                // Focus and select
+                input.focus();
+                input.select();
+                
+                // Handle save on Enter or blur
+                const saveEdit = async () => {
+                    const newValue = parseFloat(input.value);
+                    if (!isNaN(newValue)) {
+                        span.textContent = newValue;
+                        await updateServerValue(span.dataset.port, span.dataset.type, span.dataset.name, newValue);
+                    } else {
+                        span.textContent = currentValue; // Revert if invalid
+                    }
+                    span.classList.remove('editing-value');
+                };
+                
+                // Handle cancel on Escape
+                const cancelEdit = () => {
+                    span.textContent = currentValue;
+                    span.classList.remove('editing-value');
+                };
+                
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        saveEdit();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEdit();
+                    }
+                });
+                
+                input.addEventListener('blur', saveEdit);
+                return;
+            }
+            
+            // Handle other button clicks (delete, refresh, etc.)
             const button = e.target.closest('button');
             if (!button) return;
 
@@ -243,24 +378,24 @@
             }
         });
 
-        serversContainer.addEventListener('submit', async (e) => {
-            if (e.target.classList.contains('update-form')) {
-                e.preventDefault();
-                const form = e.target;
-                const { port, type } = form.dataset;
-                const name = form.querySelector('input[type="text"]').value;
-                const valueInput = form.querySelector('input[type="checkbox"], input[type="text"]:not([placeholder="Name"])');
-                const value = valueInput.type === 'checkbox' ? valueInput.checked : valueInput.value;
-                
+        // Helper function to update server values
+        async function updateServerValue(port, type, name, value) {
+            try {
                 const payload = { type, name, value };
-
-                await fetch(`${API_BASE}/servers/${port}/data`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                const response = await fetch(`${API_BASE}/servers/${port}/data`, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload)
                 });
-                form.reset();
-                setTimeout(() => loadServerData(port), 200);
+                
+                if (!response.ok) {
+                    console.error('Failed to update server value');
+                    // You could add visual feedback here
+                }
+            } catch (error) {
+                console.error('Error updating server value:', error);
             }
-        });
+        }
 
         document.addEventListener('DOMContentLoaded', loadServers);
     </script>
