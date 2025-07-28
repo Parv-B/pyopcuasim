@@ -75,26 +75,26 @@ class OpcUaServer:
                     ai_desc = cols[1] if len(cols) > 1 else ""
                     ai_value = float(cols[2]) if len(cols) > 2 and cols[2] else 0.0
                     self.analog_input_vars[ai_name] = {'value': ai_value, 'desc': ai_desc}
-                
-                # Analog Output: columns 4 (name), 5 (value), 6 (desc)
+
+                # Analog Output: columns 4 (name), 5 (desc), 6 (value)
                 if len(cols) > 4 and cols[4]:
                     ao_name = cols[4]
-                    ao_value = float(cols[5]) if len(cols) > 5 and cols[5] else 0.0
-                    ao_desc = cols[6] if len(cols) > 6 else ""
+                    ao_desc = cols[5] if len(cols) > 5 else ""
+                    ao_value = float(cols[6]) if len(cols) > 6 and cols[6] else 0.0
                     self.analog_output_vars[ao_name] = {'value': ao_value, 'desc': ao_desc}
                 
-                # Digital Input: columns 8 (name), 9 (value), 10 (desc)
+                # Digital Input: columns 8 (name), 9 (desc), 10 (value)
                 if len(cols) > 8 and cols[8]:
                     di_name = cols[8]
-                    di_value = bool(int(cols[9])) if len(cols) > 9 and cols[9] else False
-                    di_desc = cols[10] if len(cols) > 10 else ""
+                    di_desc = cols[9] if len(cols) > 9 else ""
+                    di_value = bool(int(cols[10])) if len(cols) > 10 and cols[10] else False
                     self.digital_input_vars[di_name] = {'value': di_value, 'desc': di_desc}
                 
-                # Digital Output: columns 12 (name), 13 (value), 14 (desc)
+                # Digital Output: columns 12 (name), 13 (desc), 14 (value)
                 if len(cols) > 12 and cols[12]:
                     do_name = cols[12]
-                    do_value = bool(int(cols[13])) if len(cols) > 13 and cols[13] else False
-                    do_desc = cols[14] if len(cols) > 14 else ""
+                    do_desc = cols[13] if len(cols) > 13 else ""
+                    do_value = bool(int(cols[14])) if len(cols) > 14 and cols[14] else False
                     self.digital_output_vars[do_name] = {'value': do_value, 'desc': do_desc}
             
             log.info(f"Parsed CSV data: AI={len(self.analog_input_vars)}, AO={len(self.analog_output_vars)}, DI={len(self.digital_input_vars)}, DO={len(self.digital_output_vars)}")
