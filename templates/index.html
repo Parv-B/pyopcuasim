@@ -158,23 +158,37 @@
 
             const genTable = (title, typeKey, points) => {
                 const isDigital = typeKey.includes('digital');
+                // Check if it's an input variable type (analog_input_vars or digital_input_vars)
+                const isInput = typeKey.includes('_input_vars'); 
+
                 const rows = Object.entries(points).map(([name, data]) => {
                     const value = data.value;
                     const desc = data.desc || '';
                     
                     let valueCell;
-                    if (isDigital) {
-                        valueCell = `<span class="digital-toggle ${value ? 'on' : ''}" 
-                                          data-port="${port}" 
-                                          data-type="${typeKey}" 
-                                          data-name="${name}" 
-                                          data-value="${value}">
-                                      </span>`;
+                    
+                    if (isInput) {
+                        // For Input variables, display as plain text (read-only)
+                        if (isDigital) {
+                            valueCell = `<span>${value ? 'ON' : 'OFF'}</span>`; // Display ON/OFF for digital input
+                        } else {
+                            valueCell = `<span>${value}</span>`; // Display value for analog input
+                        }
                     } else {
-                        valueCell = `<span class="editable-value" 
-                                          data-port="${port}" 
-                                          data-type="${typeKey}" 
-                                          data-name="${name}">${value}</span>`;
+                        // For Output variables, keep existing interactive elements
+                        if (isDigital) {
+                            valueCell = `<span class="digital-toggle ${value ? 'on' : ''}" 
+                                              data-port="${port}" 
+                                              data-type="${typeKey}" 
+                                              data-name="${name}" 
+                                              data-value="${value}">
+                                          </span>`;
+                        } else {
+                            valueCell = `<span class="editable-value" 
+                                              data-port="${port}" 
+                                              data-type="${typeKey}" 
+                                              data-name="${name}">${value}</span>`;
+                        }
                     }
                     
                     return `<tr><td>${name}</td><td>${desc}</td><td>${valueCell}</td></tr>`;
@@ -212,7 +226,6 @@
                 port: parseInt(createForm.port.value), 
                 name: createForm.name.value,
                 endpoint_path: endpointPath
-                // csv_data: csvData // Removed: No longer passed from frontend
             };
             
             const response = await fetch(`${API_BASE}/servers`, {
@@ -228,13 +241,13 @@
             }
         });
 
-        // Handle click-to-edit for analog values
+        // Handle click-to-edit for analog values and digital toggles
         serversContainer.addEventListener('click', async (e) => {
-            // Handle digital toggle clicks
+            // Handle digital toggle clicks (only for Digital Output, as Input now displays text)
             if (e.target.classList.contains('digital-toggle')) {
                 const toggle = e.target;
                 const port = toggle.dataset.port;
-                const type = toggle.dataset.type;
+                const type = toggle.dataset.type; // This will be 'digital_output_vars'
                 const name = toggle.dataset.name;
                 const currentValue = toggle.dataset.value === 'true';
                 const newValue = !currentValue;
@@ -248,7 +261,7 @@
                 return;
             }
             
-            // Handle analog value editing
+            // Handle analog value editing (only for Analog Output, as Input now displays text)
             if (e.target.classList.contains('editable-value') && !e.target.querySelector('input')) {
                 const span = e.target;
                 const currentValue = span.textContent;
@@ -337,6 +350,7 @@
         });
 
         // Helper function to update server values
+        // This function will only be called for Analog Output and Digital Output due to UI changes
         async function updateServerValue(port, type, name, value) {
             try {
                 const payload = { type, name, value };
