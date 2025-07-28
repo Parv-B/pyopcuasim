@@ -5,7 +5,7 @@ a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('templates', 'templates'), ('data', 'data'), ('static', 'static')],
+    datas=[('templates', 'templates'), ('data', 'data')],
     hiddenimports=['flask', 'asyncua'],
     hookspath=[],
     hooksconfig={},
