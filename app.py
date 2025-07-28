@@ -7,6 +7,7 @@ import sys # Import sys module for PyInstaller path
 from flask import Flask, render_template, request, jsonify
 from threading import Timer
 import webbrowser
+import socket
 
 from opcua_server import OpcUaServer
 
@@ -147,5 +148,31 @@ def update_server_data(port):
     return jsonify({'message': 'Data updated successfully'})
 
 if __name__ == '__main__':
-    Timer(1.0, lambda: webbrowser.open_new("http://localhost:5001")).start()
-    app.run(host='0.0.0.0', port=5001, threaded=True, debug=False)
+    # Define a range of ports to try for the GUI server
+    GUI_PORTS_TO_TRY = range(5000, 5010) # Tries ports from 5000 up to 5009
+    found_gui_port = None
+
+    for port_attempt in GUI_PORTS_TO_TRY:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(0.1)
+                s.bind(('0.0.0.0', port_attempt))
+                s.close() 
+            
+            found_gui_port = port_attempt
+            log.info(f"GUI server: Port {found_gui_port} found to be available.")
+            break
+        except OSError as e:
+            log.warning(f"GUI server: Port {port_attempt} is in use or unavailable: {e}. Trying next port...")
+        except Exception as e:
+            log.error(f"GUI server: An unexpected error occurred while checking port {port_attempt}: {e}")
+
+    if found_gui_port is None:
+        log.critical(f"GUI server: Could not find an available port in the range {GUI_PORTS_TO_TRY}. Exiting.")
+        sys.exit(1)
+
+    log.info(f"GUI server: Starting Flask app on http://0.0.0.0:{found_gui_port}")
+    
+    Timer(1.0, lambda: webbrowser.open_new(f"http://localhost:{found_gui_port}")).start()
+    
+    app.run(host='0.0.0.0', port=found_gui_port, threaded=True, debug=False)
