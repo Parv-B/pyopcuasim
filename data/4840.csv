@@ -1,7 +1,7 @@
-AnalogInput,Desc,Value,,AnalogOutput,Value,Desc,,DigitalInput,Value,Desc,,DigitalOutput,Value,Desc
-AI01,Temperature,2.30,,AO01,0.8,Servo position,,DI01,1,,,DO01,0,Running
-AI02,,4.50,,AO02,13.6,,,DI02,0,Stopped,,DO02,0,
-AI03,,1.20,,,,,,,,,,DO03,1,Running
-AI04,Volume,1.57,,,,,,,,,,DO04,1,
+AnalogInput,Desc,Value,,AnalogOutput,Desc,Value,,DigitalInput,Desc,Value,,DigitalOutput,Desc,Value
+AI01,Temperature,2.3,,AO01,Servo position,0.8,,DI01,,1,,DO01,Running,0
+AI02,,4.5,,AO02,,13.6,,DI02,Stopped,0,,DO02,,0
+AI03,,1.2,,,,,,,,,,DO03,Running,1
+AI04,Volume,1.57,,,,,,,,,,DO04,,1
 AI05,,1.02,,,,,,,,,,,,
 AI06,Pressure,0.47,,,,,,,,,,,,
